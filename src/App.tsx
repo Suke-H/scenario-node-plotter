@@ -260,6 +260,7 @@ export default function App() {
   const [selected, setSelected] = useState<ScenarioNode | null>(null);
   const [startId, setStartId] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
   const scenarioNodes = useRef<Record<string, ScenarioNode>>({});
 
   const addNode = useCallback((type: ScenarioNode["type"]) => {
@@ -293,6 +294,32 @@ export default function App() {
     return JSON.stringify(scenario, null, 2);
   }, [startId]);
 
+  const onImportFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const scenario = JSON.parse((ev.target?.result as string) ?? "") as Scenario;
+        if (!scenario.start || !Array.isArray(scenario.nodes)) {
+          setImportError("'start' と 'nodes' が必要です");
+          return;
+        }
+        scenarioNodes.current = {};
+        scenario.nodes.forEach((sn) => { scenarioNodes.current[sn.id] = sn; });
+        setNodes(scenario.nodes.map((sn) => scenarioNodeToFlow(sn)));
+        setEdges([]);
+        setStartId(scenario.start);
+        setSelected(null);
+        setImportError(null);
+      } catch (err) {
+        setImportError("パースエラー: " + (err as Error).message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }, [setNodes, setEdges]);
+
   const downloadJson = useCallback(() => {
     const blob = new Blob([exportJson()], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -318,7 +345,7 @@ export default function App() {
     <div style={{ display: "flex", height: "100vh", background: COLORS.bg, fontFamily: "'JetBrains Mono', monospace", color: COLORS.text }}>
 
       {/* 左サイドバー */}
-      <div style={{ width: 200, background: COLORS.surface, borderRight: `1px solid ${COLORS.border}`, display: "flex", flexDirection: "column", padding: 16, gap: 8 }}>
+      <div style={{ width: 200, background: COLORS.surface, borderRight: `1px solid ${COLORS.border}`, display: "flex", flexDirection: "column", padding: 16, paddingBottom: 64, gap: 8 }}>
         <div style={{ color: COLORS.textMuted, fontSize: 10, letterSpacing: 2, marginBottom: 8 }}>NOVEL EDITOR</div>
         <div style={{ color: COLORS.textMuted, fontSize: 10, marginBottom: 4 }}>ADD NODE</div>
         {(["auto", "branch", "conditional"] as const).map((type) => (
@@ -330,7 +357,14 @@ export default function App() {
         <div style={{ color: COLORS.textMuted, fontSize: 10, marginBottom: 4 }}>START NODE</div>
         <input value={startId ?? ""} onChange={(e) => setStartId(e.target.value)} placeholder="node_001" style={inputStyle} />
         <button onClick={() => setShowJson(true)} style={btnStyle("#a78bfa")}>JSON プレビュー</button>
-        <button onClick={downloadJson} style={btnStyle("#22c55e")}>JSON ダウンロード</button>
+        <button onClick={downloadJson} style={btnStyle("#22c55e")}>JSON エクスポート</button>
+        <label style={{ ...btnStyle("#f97316"), display: "block", cursor: "pointer" }}>
+          JSON インポート
+          <input type="file" accept=".json" onChange={onImportFile} style={{ display: "none" }} />
+        </label>
+        {importError && (
+          <div style={{ color: "#ef4444", fontSize: 10, wordBreak: "break-all" }}>{importError}</div>
+        )}
       </div>
 
       {/* メインキャンバス */}
