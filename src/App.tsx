@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import ReactFlow, {
   addEdge,
   useNodesState,
@@ -294,6 +294,28 @@ export default function App() {
     return JSON.stringify(scenario, null, 2);
   }, [startId]);
 
+  const loadScenario = useCallback((scenario: Scenario) => {
+    scenarioNodes.current = {};
+    scenario.nodes.forEach((sn) => { scenarioNodes.current[sn.id] = sn; });
+    setNodes(scenario.nodes.map((sn) => scenarioNodeToFlow(sn)));
+    setEdges([]);
+    setStartId(scenario.start);
+    setSelected(null);
+  }, [setNodes, setEdges]);
+
+  useEffect(() => {
+    const raw = localStorage.getItem("scenario");
+    if (!raw) return;
+    try {
+      const scenario = JSON.parse(raw) as Scenario;
+      if (scenario.start && Array.isArray(scenario.nodes)) loadScenario(scenario);
+    } catch {}
+  }, []);
+
+  const saveToLocal = useCallback(() => {
+    localStorage.setItem("scenario", exportJson());
+  }, [exportJson]);
+
   const onImportFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -305,12 +327,7 @@ export default function App() {
           setImportError("'start' と 'nodes' が必要です");
           return;
         }
-        scenarioNodes.current = {};
-        scenario.nodes.forEach((sn) => { scenarioNodes.current[sn.id] = sn; });
-        setNodes(scenario.nodes.map((sn) => scenarioNodeToFlow(sn)));
-        setEdges([]);
-        setStartId(scenario.start);
-        setSelected(null);
+        loadScenario(scenario);
         setImportError(null);
       } catch (err) {
         setImportError("パースエラー: " + (err as Error).message);
@@ -318,7 +335,7 @@ export default function App() {
     };
     reader.readAsText(file);
     e.target.value = "";
-  }, [setNodes, setEdges]);
+  }, [loadScenario]);
 
   const downloadJson = useCallback(() => {
     const blob = new Blob([exportJson()], { type: "application/json" });
@@ -356,6 +373,7 @@ export default function App() {
         <div style={{ flex: 1 }} />
         <div style={{ color: COLORS.textMuted, fontSize: 10, marginBottom: 4 }}>START NODE</div>
         <input value={startId ?? ""} onChange={(e) => setStartId(e.target.value)} placeholder="node_001" style={inputStyle} />
+        <button onClick={saveToLocal} style={btnStyle("#64748b")}>保存</button>
         <button onClick={() => setShowJson(true)} style={btnStyle("#a78bfa")}>JSON プレビュー</button>
         <button onClick={downloadJson} style={btnStyle("#22c55e")}>JSON エクスポート</button>
         <label style={{ ...btnStyle("#f97316"), display: "block", cursor: "pointer" }}>
